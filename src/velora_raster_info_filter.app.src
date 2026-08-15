@@ -1,0 +1,28 @@
+{application, velora_raster_info_filter, [
+    {description, "Emergence filter: raster metadata (size/bands/CRS), from velora"},
+    {vsn, "0.1.0"},
+    {registered, [velora_raster_info_filter_sup, velora_raster_info_filter_server]},
+    {mod, {velora_raster_info_filter_app, []}},
+    {applications, [
+        kernel,
+        stdlib,
+        inets,
+        ssl,
+        cowboy,
+        em_filter
+    ]},
+    {env, [
+        {pop_port,   9214},
+        {query_port, 9215},
+        {pop_seeds,  []},
+        {velora_url, "http://127.0.0.1:8080/agent/query"}
+    ]},
+    {modules, [
+        velora_raster_info_filter_app,
+        velora_raster_info_filter_sup,
+        velora_raster_info_filter_server,
+        velora_raster_info_filter_handler
+    ]},
+    {licenses, ["Apache-2.0"]},
+    {links, [{"GitHub", "https://github.com/EmergenceSystem/velora_raster_info_filter"}]}
+]}.
