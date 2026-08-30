@@ -10,6 +10,13 @@ velora with intent `info`. velora does the real work — classify the query,
 resolve the raster source, and inspect it via GDAL — and returns an info
 card, which this filter relays.
 
+
+<!-- emergence-context -->
+Part of **[EmergenceSystem](https://github.com/EmergenceSystem)** — a distributed
+discovery network of small, single-source agents. This filter joins the em_pop gossip
+mesh and answers `POST /agent/query`; Emquest fans each query out to many filters in
+parallel and aggregates the results.
+
 ## Contract
 
 ```
