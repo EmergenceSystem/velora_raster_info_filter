@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "id": "bug-001",
+      "timestamp": "2026-09-04T17:14:04.734Z",
+      "error_message": "Missing error handling in unknown",
+      "file": "dev/search/EmergenceSystem/filters/velora_raster_info_filter/src/velora_raster_info_filter_handler.erl",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "erl"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-04T17:14:04.734Z",
+      "project_origin": "C:/Users/steve"
+    },
+    {
+      "id": "bug-002",
+      "timestamp": "2026-09-04T17:14:15.886Z",
+      "error_message": "Wrong reference: binary should be map",
+      "file": "dev/search/EmergenceSystem/filters/velora_raster_info_filter/src/velora_raster_info_filter_handler.erl",
+      "root_cause": "Used \"binary\" instead of \"map\"",
+      "fix": "Changed binary → map",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "erl"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-09-04T17:14:15.886Z",
+      "project_origin": "C:/Users/steve"
+    }
+  ]
+}

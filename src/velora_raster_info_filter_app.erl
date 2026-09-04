@@ -1,65 +1,36 @@
 %%%-------------------------------------------------------------------
-%%% @doc velora_raster_info_filter OTP application.
+%%% @doc velora_raster_info_filter boot (application + supervisor).
 %%%
-%%% A thin Emergence adapter: it advertises a raster metadata capability
-%%% vector on the em_pop gossip mesh and, on POST /agent/query, forwards the
-%%% query to a running velora node (the "eyes of Emergence") with intent
-%%% "info". velora does the heavy GDAL/COG introspection work and returns
-%%% info cards; this filter only relays them into the mesh.
+%%% A thin Emergence adapter: registers a raster-metadata agent on the em_filter
+%%% mesh and forwards each query to a running velora node with intent "info".
+%%% velora does the GDAL/COG introspection and returns info cards; this filter
+%%% relays them (rewriting velora's host-relative URLs to absolute).
 %%%
-%%% Configuration keys (application env):
-%%%   pop_port   — em_pop gossip port      (default 9214)
-%%%   query_port — Cowboy HTTP query port  (default 9215)
-%%%   pop_seeds  — list of {Host, Port} seed peers (default [])
-%%%   velora_url — velora /agent/query endpoint
-%%%                (default "http://127.0.0.1:8080/agent/query")
+%%% Follows the current em_filter agent model (em_filter:start_agent/3): the
+%%% framework owns the em_disco WebSocket connection, JWT auth and em_pop node;
+%%% the handler module supplies handle/2 + base_capabilities/0.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(velora_raster_info_filter_app).
 -behaviour(application).
+-behaviour(supervisor).
 
--export([start/2, stop/1]).
+-export([start/2, stop/1, init/1]).
 
-start(_StartType, _StartArgs) ->
-    case velora_raster_info_filter_sup:start_link() of
-        {ok, Pid} ->
-            ok = start_pop_and_http(),
-            {ok, Pid};
-        Error ->
-            Error
-    end.
+start(_Type, _Args) ->
+    {ok, Pid} = supervisor:start_link({local, velora_raster_info_filter_boot_sup},
+                                      ?MODULE, []),
+    _ = application:ensure_all_started(em_filter),
+    _ = em_filter:start_agent(velora_raster_info_filter,
+                              velora_raster_info_filter_handler,
+          #{pop_port     => 9214,
+            query_port   => 9215,
+            capabilities => velora_raster_info_filter_handler:base_capabilities(),
+            pop_peers    => [{"localhost", 9101}],
+            pop_role     => leaf}),
+    {ok, Pid}.
 
-stop(_State) ->
-    catch cowboy:stop_listener(velora_raster_info_filter_query_listener),
-    catch em_pop_sup:stop_node(velora_raster_info_filter),
-    ok.
+stop(_State) -> ok.
 
-start_pop_and_http() ->
-    PopPort   = application:get_env(velora_raster_info_filter, pop_port,   9214),
-    QueryPort = application:get_env(velora_raster_info_filter, query_port, 9215),
-    Seeds     = application:get_env(velora_raster_info_filter, pop_seeds,  []),
-    Vec = em_filter_vec:from_capabilities(
-              [<<"raster">>, <<"geotiff">>, <<"metadata">>, <<"gis">>,
-               <<"cog">>, <<"bands">>, <<"projection">>, <<"geo">>]),
-    catch em_pop_sup:stop_node(velora_raster_info_filter),
-    catch cowboy:stop_listener(velora_raster_info_filter_query_listener),
-    {ok, PopPid} = em_pop_sup:start_node(velora_raster_info_filter, #{
-        port            => PopPort,
-        query_port      => QueryPort,
-        vector          => Vec,
-        max_peers       => 100,
-        gossip_interval => 5_000
-    }),
-    lists:foreach(
-        fun({H, P}) -> catch em_pop_node:add_peer(PopPid, H, P) end,
-        Seeds),
-    Dispatch = cowboy_router:compile([
-        {'_', [{"/agent/query", em_filter_http,
-                #{server => velora_raster_info_filter_server}}]}
-    ]),
-    {ok, _} = cowboy:start_clear(velora_raster_info_filter_query_listener,
-                                  [{port, QueryPort}],
-                                  #{env => #{dispatch => Dispatch}}),
-    logger:notice("[velora_raster_info_filter] gossip port ~w  query port ~w",
-                  [PopPort, QueryPort]),
-    ok.
+init([]) ->
+    {ok, {#{strategy => one_for_one, intensity => 1, period => 5}, []}}.
