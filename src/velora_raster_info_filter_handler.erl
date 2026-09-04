@@ -17,13 +17,14 @@
 -spec query(binary()) -> [map()].
 query(Query) when is_binary(Query) ->
     Url  = application:get_env(velora_raster_info_filter, velora_url,
-                               "http://127.0.0.1:8080/agent/query"),
+                               "http://127.0.0.1:8081/agent/query"),
     Body = iolist_to_binary(json:encode(#{<<"query">> => Query,
                                           <<"intent">> => ?INTENT})),
     case post(Url, Body) of
         {ok, Resp} ->
             case (try json:decode(Resp) catch _:_ -> #{} end) of
-                #{<<"results">> := Results} when is_list(Results) -> Results;
+                #{<<"results">> := Results} when is_list(Results) ->
+                    rewrite_cards(Results, base());
                 _ -> []
             end;
         {error, _} -> []
@@ -34,6 +35,33 @@ query(Query) when is_binary(Query) ->
 handle(Query, Memory) ->
     Result = iolist_to_binary(json:encode(query(Query))),
     {Result, Memory}.
+
+%% Uniform mesh-egress rewrite (shared with the tiles/ndvi filters): turn any
+%% host-relative velora path into an absolute URL under the public base. Info
+%% cards carry no link fields today so this is a no-op, but keeps the three
+%% filters identical and future-proofs any link velora may add.
+base() ->
+    iolist_to_binary(
+        application:get_env(velora_raster_info_filter, tiles_base,
+                            "https://velora.roques.me")).
+
+rewrite_cards(Cards, Base) -> [rewrite_card(C, Base) || C <- Cards].
+
+rewrite_card(Card, Base) when is_map(Card) ->
+    C1 = lists:foldl(fun(K, Acc) -> abs_field(Acc, K, Base) end, Card,
+                     [<<"poll">>, <<"tiles">>, <<"result_tiles">>]),
+    case maps:get(<<"preview">>, C1, undefined) of
+        P when is_map(P) -> C1#{<<"preview">> => abs_field(P, <<"tiles">>, Base)};
+        _                -> C1
+    end;
+rewrite_card(Other, _Base) -> Other.
+
+%% Prefix a leading-slash relative path with Base; leave absolute/missing as-is.
+abs_field(Map, Key, Base) ->
+    case maps:get(Key, Map, undefined) of
+        <<"/", _/binary>> = Rel -> Map#{Key => <<Base/binary, Rel/binary>>};
+        _                       -> Map
+    end.
 
 post(Url, Body) ->
     _ = application:ensure_all_started(inets),
